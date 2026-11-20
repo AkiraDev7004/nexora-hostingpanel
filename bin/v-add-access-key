@@ -81,7 +81,9 @@ if [[ -e "$HESTIA/data/access-keys/${access_key_id}" ]]; then
 	done
 fi
 
-echo "SECRET_ACCESS_KEY='$secret_access_key'" > "$HESTIA/data/access-keys/${access_key_id}"
+# NEXORA: only a SHA-256 hash of the (40 char, high-entropy) secret is stored
+secret_hash="sha256:$(printf '%s' "$secret_access_key" | sha256sum | cut -d' ' -f1)"
+echo "SECRET_ACCESS_KEY='$secret_hash'" > "$HESTIA/data/access-keys/${access_key_id}"
 echo "USER='$user'" >> "$HESTIA/data/access-keys/${access_key_id}"
 echo "PERMISSIONS='$permissions'" >> "$HESTIA/data/access-keys/${access_key_id}"
 echo "COMMENT='$comment'" >> "$HESTIA/data/access-keys/${access_key_id}"
@@ -93,7 +95,8 @@ echo "IP=''" >> "$HESTIA/data/access-keys/${access_key_id}"
 
 chmod 640 "$HESTIA/data/access-keys/${access_key_id}"
 
-$BIN/v-list-access-key "$access_key_id" "$format"
+# Secret is shown exactly once here, afterwards only its hash exists
+SHOW_SECRET_ONCE="$secret_access_key" $BIN/v-list-access-key "$access_key_id" "$format"
 
 #----------------------------------------------------------#
 #                       Hestia                             #

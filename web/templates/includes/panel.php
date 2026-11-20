@@ -319,6 +319,15 @@
 					</li>
 				<?php } ?>
 
+				<!-- NEXORA Websites -->
+				<?php if (isset($_SESSION["WEB_SYSTEM"]) && !empty($_SESSION["WEB_SYSTEM"])) { ?>
+					<li class="main-menu-item">
+						<a class="main-menu-item-link <?php if ($TAB == "SITES") { echo "active"; } ?>" href="/list/site/">
+							<p class="main-menu-item-label"><?= _("WEBSITES") ?><i class="fas fa-cubes"></i></p>
+						</a>
+					</li>
+				<?php } ?>
+
 				<!-- Web tab -->
 				<?php if (isset($_SESSION["WEB_SYSTEM"]) && !empty($_SESSION["WEB_SYSTEM"])) { ?>
 					<?php if ($panel[$user]["WEB_DOMAINS"] != "0") { ?>

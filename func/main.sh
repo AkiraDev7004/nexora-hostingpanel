@@ -2120,9 +2120,22 @@ check_access_key_secret() {
 		SECRET_ACCESS_KEY=""
 		source_conf "$HESTIA/data/access-keys/${access_key_id}"
 
-		if [[ -z "$SECRET_ACCESS_KEY" || "$SECRET_ACCESS_KEY" != "$secret_access_key" ]]; then
+		local given="$secret_access_key"
+		if [[ "$SECRET_ACCESS_KEY" == sha256:* ]]; then
+			given="sha256:$(printf '%s' "$secret_access_key" | sha256sum | cut -d' ' -f1)"
+		fi
+		if [[ -z "$SECRET_ACCESS_KEY" || "$SECRET_ACCESS_KEY" != "$given" ]]; then
 			check_result "$E_PASSWORD" "Invalid secret key for key $access_key_id"
 		fi
+		# NEXORA: expiry (EXPIRES_IN = unix timestamp) and last-use tracking
+		if [[ "$EXPIRES_IN" =~ ^[0-9]+$ ]] && [ "$EXPIRES_IN" -lt "$(date +%s)" ]; then
+			check_result "$E_FORBIDEN" "Access key $access_key_id expired"
+		fi
+		if [ "$DISABLED" = "yes" ]; then
+			check_result "$E_FORBIDEN" "Access key $access_key_id disabled"
+		fi
+		sed -i "/^LAST_USED=/d" "$HESTIA/data/access-keys/${access_key_id}"
+		echo "LAST_USED='$(date '+%F %T')'" >> "$HESTIA/data/access-keys/${access_key_id}"
 	fi
 
 	key_user="$USER"

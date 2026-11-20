@@ -73,6 +73,8 @@ DATE=""
 TIME=""
 
 source_conf "${HESTIA}/data/access-keys/${access_key_id}"
+# NEXORA: secrets are stored hashed; plaintext only right after creation
+if [ -n "$SHOW_SECRET_ONCE" ]; then SECRET_ACCESS_KEY="$SHOW_SECRET_ONCE"; elif [[ "$SECRET_ACCESS_KEY" == sha256:* ]]; then SECRET_ACCESS_KEY="(hidden)"; fi
 
 # Listing data
 case $format in

@@ -47,9 +47,10 @@ step 2 4 "Applying NEXORA configuration"
 install -d -m 750 /usr/local/nexora /etc/nexora; cp -r "$ROOT/nexora/." /usr/local/nexora/
 printf 'MODE=%s\nDOCKER=%s\nNODE=%s\nPYTHON=%s\nMAILCOW=%s\n' $MODE $DOCKER "$(yn node)" "$(yn python)" "$(yn mailcow)" >/etc/nexora/nexora.conf
 chmod 640 /etc/nexora/nexora.conf
-sed -i "s/^THEME=.*/THEME='nexora-oled'/" /usr/local/hestia/conf/hestia.conf 2>/dev/null
+/usr/local/hestia/bin/v-change-sys-config-value THEME nexora-oled; /usr/local/hestia/bin/v-change-sys-config-value APP_NAME "NEXORA Panel"
 step 3 4 "Runtimes"
 [ "$(yn node)" = yes ] && apt-get -y -qq install nodejs npm >>"$NX_LOG" 2>&1 && ok "Node.js"
+apt-get -y -qq install unbound >>"$NX_LOG" 2>&1 && mkdir -p /etc/unbound/unbound.conf.d && printf "server:\n  interface: 127.0.0.1@5335\n  access-control: 127.0.0.0/8 allow\n" >/etc/unbound/unbound.conf.d/nexora.conf && systemctl restart unbound >>"$NX_LOG" 2>&1 && ok "Unbound resolver (127.0.0.1:5335, local only)"
 [ "$(yn python)" = yes ] && apt-get -y -qq install python3 python3-venv >>"$NX_LOG" 2>&1 && ok "Python"
 if [ "$(yn mailcow)" = yes ]; then git clone -q https://github.com/mailcow/mailcow-dockerized /opt/mailcow-dockerized >>"$NX_LOG" 2>&1 && ok "Mailcow fetched to /opt/mailcow-dockerized (run generate_config.sh)"; fi
 step 4 4 "Final verification"

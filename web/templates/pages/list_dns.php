@@ -7,6 +7,11 @@
 					<i class="fas fa-circle-plus icon-green"></i><?= tohtml( _("Add DNS Domain")) ?>
 				</a>
 			<?php } ?>
+			<?php if ($_SESSION["userContext"] === "admin") { ?>
+				<a href="/list/dns-block/" class="button button-secondary">
+					<i class="fas fa-ban icon-red"></i><?= tohtml( _("Domain Blocking")) ?>
+				</a>
+			<?php } ?>
 		</div>
 		<div class="toolbar-right">
 			<div class="toolbar-sorting">

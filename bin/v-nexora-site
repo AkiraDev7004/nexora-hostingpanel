@@ -1,0 +1,346 @@
+#!/bin/bash
+# info: NEXORA per-website application runtime (Docker or Classic)
+# options: ACTION USER [DOMAIN] [TYPE] [IP] [VERSION] [CPU] [MEM_MB] [UPSTREAM] [SSL] [DNS] [MAIL]
+#
+# example: v-nexora-site add admin example.com node 192.0.2.10 22 1 512 '' yes yes no
+# example: v-nexora-site stop admin example.com
+# example: v-nexora-site list admin json
+#
+# ACTION: add | delete | start | stop | restart | rebuild | status | logs | list | limits
+# TYPE:   php | wordpress | node | python | static | proxy
+#
+# Docker mode: every website gets its own container + its own bridge network
+# (inter-container communication disabled), non-root, no capabilities,
+# read-only rootfs, no docker socket, CPU/RAM/PID limits, port bound to 127.0.0.1.
+# Classic mode: Hestia php-fpm pool per site, Node/Python via a hardened
+# systemd unit running as the site owner.
+
+action=$1
+user=$2
+domain=$3
+domain_idn=$3
+type=${4-php}
+ip=$5
+version=$6
+cpu=${7-1}
+mem=${8-512}
+upstream=$9
+ssl=${10-no}
+dns=${11-no}
+mail=${12-no}
+
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+source_conf "$HESTIA/conf/hestia.conf"
+
+NX_MODE=classic
+[ -f /etc/nexora/nexora.conf ] && source /etc/nexora/nexora.conf && NX_MODE=${MODE:-classic}
+NXDIR="$HESTIA/data/users/$user/nexora"
+cname() { echo "nx-$(echo "$1" | tr -c 'a-zA-Z0-9\n' '-')"; }
+
+nx_fail() { echo "Error: $1" >&2; exit "${2:-$E_INVALID}"; }
+
+#----------------------------------------------------------#
+#                    Verifications                         #
+#----------------------------------------------------------#
+
+check_args '2' "$#" 'ACTION USER [DOMAIN] ...'
+case "$action" in add | delete | start | stop | restart | rebuild | status | logs | list | limits) ;; *) nx_fail "unknown action" ;; esac
+is_format_valid 'user'
+is_object_valid 'user' 'USER' "$user"
+if [ "$action" != list ]; then
+	check_args '3' "$#" 'ACTION USER DOMAIN'
+	is_format_valid 'domain'
+fi
+if [ "$action" = add ]; then
+	case "$type" in php | wordpress | node | python | static | proxy) ;; *) nx_fail "invalid type" ;; esac
+	is_format_valid 'ip'
+	[[ "$cpu" =~ ^[0-9]+(\.[0-9]+)?$ ]] || nx_fail "invalid cpu"
+	[[ "$mem" =~ ^[0-9]+$ ]] && [ "$mem" -ge 64 ] || nx_fail "invalid memory (MB, >=64)"
+	[ -z "$version" ] || [[ "$version" =~ ^[0-9]+(\.[0-9]+)?$ ]] || nx_fail "invalid version"
+	if [ "$type" = proxy ]; then
+		[[ "$upstream" =~ ^https?://[A-Za-z0-9.:\[\]-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$ ]] || nx_fail "invalid upstream url"
+	fi
+	# IP must really be configured on this host, not only in the database
+	ip_plain="${ip%%/*}"
+	ip -o addr show | awk '{split($4,a,"/");print a[1]}' | grep -qxF "$ip_plain" || nx_fail "IP $ip is not configured on this server" "$E_NOTEXIST"
+	if [ "$NX_MODE" = docker ] && [ "$type" != proxy ]; then
+		docker info > /dev/null 2>&1 || nx_fail "Docker is not available" "$E_NOTEXIST"
+	fi
+	[ -e "$NXDIR/$domain.conf" ] && nx_fail "site already exists" "$E_EXISTS"
+fi
+if [[ "$action" =~ ^(delete|start|stop|restart|rebuild|status|logs|limits)$ ]]; then
+	[ -f "$NXDIR/$domain.conf" ] || nx_fail "site does not exist" "$E_NOTEXIST"
+	source "$NXDIR/$domain.conf"
+fi
+
+#----------------------------------------------------------#
+#                       Helpers                            #
+#----------------------------------------------------------#
+
+free_port() {
+	local p used
+	used="$(cat $HESTIA/data/users/*/nexora/*.conf 2> /dev/null | sed -n "s/^PORT='\([0-9]*\)'/\1/p")"
+	for p in $(seq 20000 29999); do
+		echo "$used" | grep -qx "$p" && continue
+		ss -ltn "( sport = :$p )" | grep -q LISTEN && continue
+		echo "$p"
+		return
+	done
+	nx_fail "no free port"
+}
+
+site_dirs() {
+	SITEDIR="$HOMEDIR/$user/web/$domain"
+	APPDIR="$SITEDIR/public_html"
+	[[ "$TYPE" =~ ^(node|python)$ ]] && APPDIR="$SITEDIR/app"
+}
+
+write_upstream() {
+	local f="$HOMEDIR/$user/conf/web/$domain/nexora.upstream"
+	case "$TYPE" in
+		php | wordpress) echo "fastcgi_pass 127.0.0.1:$PORT;" > "$f" ;;
+		proxy) echo "proxy_pass $UPSTREAM;" > "$f" ;;
+		*) echo "proxy_pass http://127.0.0.1:$PORT;" > "$f" ;;
+	esac
+	chmod 640 "$f"
+}
+
+docker_create() {
+	local uid gid img inner cmd=() mnt="/app" ro=""
+	uid=$(id -u "$user")
+	gid=$(id -g "$user")
+	case "$TYPE" in
+		php | wordpress)
+			img="php:${VERSION:-8.3}-fpm-alpine"
+			inner=9000
+			;;
+		node)
+			img="node:${VERSION:-22}-alpine"
+			inner=3000
+			cmd=(sh -c 'if [ -f package.json ]; then npm install --omit=dev --no-audit --no-fund; exec npm start; else exec node server.js; fi')
+			;;
+		python)
+			img="python:${VERSION:-3.12}-slim"
+			inner=8000
+			cmd=(sh -c '[ -f requirements.txt ] && pip install --user -r requirements.txt; exec python app.py')
+			;;
+		static)
+			img="nginxinc/nginx-unprivileged:stable-alpine"
+			inner=8080
+			mnt="/usr/share/nginx/html"
+			ro=":ro"
+			;;
+	esac
+	docker network inspect "$NET" > /dev/null 2>&1 \
+		|| docker network create --driver bridge -o com.docker.network.bridge.enable_icc=false \
+			--label nexora.site="$domain" "$NET" > /dev/null || return 1
+	docker pull -q "$img" > /dev/null || return 1
+	docker create --name "$CNAME" --hostname "$CNAME" \
+		--label nexora.site="$domain" --label nexora.user="$user" \
+		--network "$NET" -p "127.0.0.1:$PORT:$inner" \
+		--user "$uid:$gid" --cap-drop ALL --security-opt no-new-privileges:true \
+		--read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --tmpfs /var/cache/nginx:rw,size=16m \
+		--cpus "$CPU" --memory "${MEM}m" --memory-swap "${MEM}m" --pids-limit 256 \
+		--log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
+		--restart unless-stopped \
+		-e HOME=/tmp -e PORT="$inner" -e PYTHONUSERBASE=/app/.local -e npm_config_cache=/tmp/.npm \
+		-w "$mnt" -v "$APPDIR:$mnt$ro" "$img" "${cmd[@]}" > /dev/null
+}
+
+classic_unit() {
+	local unit="/etc/systemd/system/$CNAME.service" exe
+	case "$TYPE" in
+		node) exe="/bin/sh -c 'if [ -f package.json ]; then exec npm start; else exec node server.js; fi'" ;;
+		python) exe="/bin/sh -c 'exec python3 app.py'" ;;
+		*) return 0 ;;
+	esac
+	cat > "$unit" <<- UNIT
+		[Unit]
+		Description=NEXORA site $domain
+		After=network.target
+		[Service]
+		User=$user
+		WorkingDirectory=$APPDIR
+		Environment=PORT=$PORT HOST=127.0.0.1
+		ExecStart=$exe
+		Restart=on-failure
+		NoNewPrivileges=yes
+		PrivateTmp=yes
+		ProtectSystem=strict
+		ProtectHome=tmpfs
+		BindPaths=$APPDIR
+		ReadWritePaths=$APPDIR
+		CapabilityBoundingSet=
+		MemoryMax=${MEM}M
+		CPUQuota=$(awk "BEGIN{print int($CPU*100)}")%
+		TasksMax=256
+		[Install]
+		WantedBy=multi-user.target
+	UNIT
+	systemctl daemon-reload
+	systemctl enable --now "$CNAME" > /dev/null 2>&1
+}
+
+save_conf() {
+	mkdir -p "$NXDIR"
+	cat > "$NXDIR/$domain.conf" <<- CONF
+		TYPE='$TYPE'
+		MODE='$NX_MODE'
+		IP='$IP'
+		VERSION='$VERSION'
+		CPU='$CPU'
+		MEM='$MEM'
+		PORT='$PORT'
+		UPSTREAM='$UPSTREAM'
+		CNAME='$CNAME'
+		NET='$NET'
+		TIME='$(date +%T)'
+		DATE='$(date +%F)'
+	CONF
+	chmod 640 "$NXDIR/$domain.conf"
+}
+
+state() {
+	if [ "$MODE" = docker ] && [ "$TYPE" != proxy ]; then
+		docker inspect -f '{{.State.Status}}' "$CNAME" 2> /dev/null || echo missing
+	elif [[ "$TYPE" =~ ^(node|python)$ ]]; then
+		systemctl is-active "$CNAME" 2> /dev/null
+	else
+		echo "php-fpm/nginx"
+	fi
+}
+
+#----------------------------------------------------------#
+#                       Action                             #
+#----------------------------------------------------------#
+
+case "$action" in
+	add)
+		TYPE=$type IP=$ip VERSION=$version CPU=$cpu MEM=$mem UPSTREAM=$upstream MODE=$NX_MODE
+		CNAME=$(cname "$domain")
+		NET="${CNAME}-net"
+		PORT=""
+		[ "$TYPE" != proxy ] && { [ "$NX_MODE" = docker ] || [[ "$TYPE" =~ ^(node|python)$ ]]; } && PORT=$(free_port)
+		$BIN/v-add-web-domain "$user" "$domain" "$ip" || exit $?
+		site_dirs
+		mkdir -p "$APPDIR" && chown "$user:$user" "$APPDIR" && chmod 750 "$APPDIR"
+		if [ "$TYPE" = wordpress ]; then
+			tmp=$(mktemp -d)
+			if curl -fsSL https://wordpress.org/latest.tar.gz -o "$tmp/wp.tgz" && tar xzf "$tmp/wp.tgz" -C "$tmp"; then
+				rm -f "$APPDIR/index.html"
+				cp -a "$tmp/wordpress/." "$APPDIR/"
+				chown -R "$user:$user" "$APPDIR"
+			fi
+			rm -rf "$tmp"
+			dbn="wp$(head -c4 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+			dbp="$(head -c 24 /dev/urandom | base64 | tr -dc A-Za-z0-9)"
+			$BIN/v-add-database "$user" "$dbn" "$dbn" "$dbp" mysql > /dev/null 2>&1 && echo "WordPress database: ${user}_$dbn (user ${user}_$dbn) - set password via panel."
+		fi
+		save_conf
+		if [ "$NX_MODE" = docker ] && [ "$TYPE" != proxy ]; then
+			docker_create || {
+				$BIN/v-delete-web-domain "$user" "$domain" yes > /dev/null 2>&1
+				rm -f "$NXDIR/$domain.conf"
+				nx_fail "container creation failed" "$E_UPDATE"
+			}
+			docker start "$CNAME" > /dev/null
+		else
+			classic_unit
+		fi
+		if [ "$NX_MODE" = docker ] && [[ "$TYPE" =~ ^(php|wordpress)$ ]]; then
+			write_upstream
+			$BIN/v-change-web-domain-tpl "$user" "$domain" nexora-docker-php yes
+		elif [[ "$TYPE" =~ ^(node|python|proxy)$ ]] || { [ "$NX_MODE" = docker ] && [ "$TYPE" = static ]; }; then
+			write_upstream
+			$BIN/v-change-web-domain-tpl "$user" "$domain" nexora-docker-app yes
+		fi
+		[ "$dns" = yes ] && $BIN/v-add-dns-domain "$user" "$domain" "$ip" > /dev/null 2>&1
+		[ "$mail" = yes ] && $BIN/v-add-mail-domain "$user" "$domain" > /dev/null 2>&1
+		[ "$ssl" = yes ] && { $BIN/v-add-letsencrypt-domain "$user" "$domain" || echo "Warning: Let's Encrypt failed (DNS/reachability). Site created without SSL."; }
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	delete)
+		if [ "$MODE" = docker ]; then
+			docker rm -f "$CNAME" > /dev/null 2>&1
+			docker network rm "$NET" > /dev/null 2>&1
+		elif [ -f "/etc/systemd/system/$CNAME.service" ]; then
+			systemctl disable --now "$CNAME" > /dev/null 2>&1
+			rm -f "/etc/systemd/system/$CNAME.service"
+			systemctl daemon-reload
+		fi
+		rm -f "$NXDIR/$domain.conf"
+		$BIN/v-delete-web-domain "$user" "$domain" yes
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	start | stop | restart)
+		if [ "$MODE" = docker ] && [ "$TYPE" != proxy ]; then
+			docker "$action" "$CNAME" > /dev/null || nx_fail "docker $action failed" "$E_UPDATE"
+		elif [[ "$TYPE" =~ ^(node|python)$ ]]; then
+			systemctl "$action" "$CNAME" || nx_fail "systemctl $action failed" "$E_UPDATE"
+		else
+			[ "$action" = stop ] && $BIN/v-suspend-web-domain "$user" "$domain" yes
+			[ "$action" = start ] && $BIN/v-unsuspend-web-domain "$user" "$domain" yes
+			[ "$action" = restart ] && $BIN/v-restart-web
+		fi
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	rebuild)
+		[ "$MODE" = docker ] || nx_fail "rebuild requires Docker mode"
+		site_dirs
+		docker rm -f "$CNAME" > /dev/null 2>&1
+		docker_create && docker start "$CNAME" > /dev/null || nx_fail "rebuild failed" "$E_UPDATE"
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	limits)
+		# v-nexora-site limits USER DOMAIN CPU MEM  (args 4/5)
+		CPU=$4 MEM=$5
+		[[ "$CPU" =~ ^[0-9]+(\.[0-9]+)?$ && "$MEM" =~ ^[0-9]+$ ]] || nx_fail "invalid limits"
+		if [ "$MODE" = docker ]; then
+			docker update --cpus "$CPU" --memory "${MEM}m" --memory-swap "${MEM}m" "$CNAME" > /dev/null || nx_fail "update failed"
+		fi
+		IP_SAVE=$IP
+		site_dirs
+		IP=$IP_SAVE
+		save_conf
+		[ "$MODE" = classic ] && classic_unit
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	status) state ;;
+	logs)
+		if [ "$MODE" = docker ] && [ "$TYPE" != proxy ]; then
+			docker logs --tail 300 "$CNAME" 2>&1
+		elif [[ "$TYPE" =~ ^(node|python)$ ]]; then
+			journalctl -u "$CNAME" -n 300 --no-pager
+		else
+			tail -n 300 "/var/log/nginx/domains/$domain.error.log" 2> /dev/null
+		fi
+		;;
+	list)
+		fmt=${3-shell}
+		first=1
+		[ "$fmt" = json ] && echo '{'
+		for f in "$NXDIR"/*.conf; do
+			[ -f "$f" ] || continue
+			d=$(basename "$f" .conf)
+			(
+				source "$f"
+				st=$(state)
+				stats=""
+				if [ "$MODE" = docker ] && [ "$st" = running ]; then
+					stats=$(docker stats --no-stream --format '{{.CPUPerc}}|{{.MemUsage}}' "$CNAME" 2> /dev/null)
+				fi
+				if [ "$fmt" = json ]; then
+					[ "$first" = 1 ] || echo ','
+					printf '"%s":{"TYPE":"%s","MODE":"%s","IP":"%s","VERSION":"%s","CPU":"%s","MEM":"%s","PORT":"%s","CONTAINER":"%s","STATE":"%s","USAGE":"%s","DATE":"%s"}' \
+						"$d" "$TYPE" "$MODE" "$IP" "$VERSION" "$CPU" "$MEM" "$PORT" "$CNAME" "$st" "$stats" "$DATE"
+				else
+					printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$d" "$TYPE" "$MODE" "$IP" "$st" "$stats"
+				fi
+			)
+			first=0
+		done
+		[ "$fmt" = json ] && echo '}'
+		;;
+esac
+exit 0
