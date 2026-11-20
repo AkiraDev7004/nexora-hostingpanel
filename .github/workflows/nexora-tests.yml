@@ -1,0 +1,9 @@
+name: NEXORA tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y php-cli
+      - run: sudo nexora/tests/run.sh

@@ -1,0 +1,2 @@
+ROLE='user'
+COMMANDS='v-nexora-site,v-list-web-domains,v-list-web-domain,v-add-letsencrypt-domain,v-list-databases,v-add-database,v-delete-database,v-list-dns-domains,v-list-dns-records,v-add-dns-record,v-delete-dns-record'

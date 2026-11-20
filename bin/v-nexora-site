@@ -6,7 +6,9 @@
 # example: v-nexora-site stop admin example.com
 # example: v-nexora-site list admin json
 #
-# ACTION: add | delete | start | stop | restart | rebuild | status | logs | list | limits
+# ACTION: add | delete | start | stop | restart | rebuild | status | logs | list | limits | migrate
+# migrate: move a site to the current system mode (classic <-> docker). Site files,
+#          databases, mail and DNS are never touched; on failure the old runtime is restored.
 # TYPE:   php | wordpress | node | python | static | proxy
 #
 # Docker mode: every website gets its own container + its own bridge network
@@ -38,14 +40,17 @@ NX_MODE=classic
 NXDIR="$HESTIA/data/users/$user/nexora"
 cname() { echo "nx-$(echo "$1" | tr -c 'a-zA-Z0-9\n' '-')"; }
 
-nx_fail() { echo "Error: $1" >&2; exit "${2:-$E_INVALID}"; }
+nx_fail() {
+	echo "Error: $1" >&2
+	exit "${2:-$E_INVALID}"
+}
 
 #----------------------------------------------------------#
 #                    Verifications                         #
 #----------------------------------------------------------#
 
 check_args '2' "$#" 'ACTION USER [DOMAIN] ...'
-case "$action" in add | delete | start | stop | restart | rebuild | status | logs | list | limits) ;; *) nx_fail "unknown action" ;; esac
+case "$action" in add | delete | start | stop | restart | rebuild | status | logs | list | limits | migrate) ;; *) nx_fail "unknown action" ;; esac
 is_format_valid 'user'
 is_object_valid 'user' 'USER' "$user"
 if [ "$action" != list ]; then
@@ -69,7 +74,7 @@ if [ "$action" = add ]; then
 	fi
 	[ -e "$NXDIR/$domain.conf" ] && nx_fail "site already exists" "$E_EXISTS"
 fi
-if [[ "$action" =~ ^(delete|start|stop|restart|rebuild|status|logs|limits)$ ]]; then
+if [[ "$action" =~ ^(delete|start|stop|restart|rebuild|status|logs|limits|migrate)$ ]]; then
 	[ -f "$NXDIR/$domain.conf" ] || nx_fail "site does not exist" "$E_NOTEXIST"
 	source "$NXDIR/$domain.conf"
 fi
@@ -304,6 +309,46 @@ case "$action" in
 		IP=$IP_SAVE
 		save_conf
 		[ "$MODE" = classic ] && classic_unit
+		log_event "$OK" "$ARGUMENTS"
+		;;
+	migrate)
+		[ "$MODE" = "$NX_MODE" ] && {
+			echo "Already in $NX_MODE mode"
+			exit 0
+		}
+		[ "$TYPE" = proxy ] && {
+			MODE=$NX_MODE
+			site_dirs
+			save_conf
+			exit 0
+		}
+		OLD_MODE=$MODE
+		site_dirs
+		[ -n "$PORT" ] || PORT=$(free_port)
+		if [ "$NX_MODE" = docker ]; then
+			docker info > /dev/null 2>&1 || nx_fail "Docker is not available" "$E_NOTEXIST"
+			if docker_create && docker start "$CNAME" > /dev/null; then
+				[ -f "/etc/systemd/system/$CNAME.service" ] && systemctl disable --now "$CNAME" > /dev/null 2>&1 && rm -f "/etc/systemd/system/$CNAME.service" && systemctl daemon-reload
+			else
+				docker rm -f "$CNAME" > /dev/null 2>&1
+				nx_fail "migration failed, classic runtime kept" "$E_UPDATE"
+			fi
+			MODE=docker
+			write_upstream
+			tpl=nexora-docker-app
+			[[ "$TYPE" =~ ^(php|wordpress)$ ]] && tpl=nexora-docker-php
+		else
+			MODE=classic
+			classic_unit || nx_fail "migration failed" "$E_UPDATE"
+			write_upstream
+			tpl=nexora-docker-app
+			[[ "$TYPE" =~ ^(php|wordpress|static)$ ]] && tpl=default
+			docker rm -f "$CNAME" > /dev/null 2>&1
+			docker network rm "$NET" > /dev/null 2>&1
+		fi
+		$BIN/v-change-web-domain-tpl "$user" "$domain" "$tpl" yes
+		save_conf
+		echo "Migrated $domain: $OLD_MODE -> $MODE"
 		log_event "$OK" "$ARGUMENTS"
 		;;
 	status) state ;;

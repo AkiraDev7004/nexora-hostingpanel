@@ -5,6 +5,11 @@
 			<a href="/list/server/" class="button button-secondary button-back js-button-back">
 				<i class="fas fa-arrow-left icon-blue"></i><?= tohtml( _("Back")) ?>
 			</a>
+			<a href="/edit/branding/" class="button button-secondary"><i class="fas fa-palette icon-purple"></i><?= tohtml(_("Branding")) ?></a>
+			<a href="/list/roles/" class="button button-secondary"><i class="fas fa-user-shield icon-blue"></i><?= tohtml(_("Roles")) ?></a>
+			<a href="/list/api-docs/" class="button button-secondary"><i class="fas fa-book icon-green"></i><?= tohtml(_("API Documentation")) ?></a>
+			<a href="/list/dns-block/" class="button button-secondary"><i class="fas fa-ban icon-red"></i><?= tohtml(_("DNS Blocking")) ?></a>
+			<a href="/list/mailcow/" class="button button-secondary"><i class="fas fa-envelope icon-orange"></i>Mailcow</a>
 			<a href="/list/ip/" class="button button-secondary">
 				<i class="fas fa-ethernet icon-blue"></i><?= tohtml( _("Network")) ?>
 			</a>

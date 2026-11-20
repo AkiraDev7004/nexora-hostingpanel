@@ -595,7 +595,11 @@ function load_hestia_config() {
 	}
 	// NEXORA white-label branding
 	exec(HESTIA_CMD . "v-nexora-branding json", $bout, $brv);
-	$_SESSION["NX_BRAND"] = $brv == 0 ? json_decode(implode("", $bout), true) ?: [] : [];
+	if (!empty($_SESSION["user"])) {
+		exec(HESTIA_CMD . "v-nexora-reseller role " . escapeshellarg($_SESSION["user"]), $rout);
+		$_SESSION["NX_ROLE"] = trim(implode("", $rout));
+	}
+	$_SESSION["NX_BRAND"] = $brv == 0 ? (json_decode(implode("", $bout), true) ?: []) : [];
 }
 
 function nx_brand($key, $default = "") {

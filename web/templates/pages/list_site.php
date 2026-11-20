@@ -32,7 +32,7 @@
 			<div class="units-table-cell"><?= tohtml(str_replace("|", " / ", $s["USAGE"])) ?></div>
 			<div class="units-table-cell"><?= tohtml($s["CPU"] . " CPU / " . $s["MEM"] . " MB") ?></div>
 			<div class="units-table-cell">
-				<?php foreach (["start", "stop", "restart"] + ($s["MODE"] === "docker" ? [3 => "rebuild"] : []) + [4 => "delete"] as $a) { ?>
+				<?php foreach (["start", "stop", "restart"] + ($s["MODE"] === "docker" ? [3 => "rebuild"] : []) + ($s["MODE"] !== $nx_mode ? [5 => "migrate"] : []) + [4 => "delete"] as $a) { ?>
 				<form method="post" action="/nexora/site/" style="display:inline" <?= $a === "delete" ? 'onsubmit="return confirm(\'' . tohtml(_("Delete website and its data?")) . '\')"' : "" ?>>
 					<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
 					<input type="hidden" name="domain" value="<?= tohtml($d) ?>">

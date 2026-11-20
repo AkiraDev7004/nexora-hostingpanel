@@ -1,0 +1,99 @@
+#!/bin/bash
+# info: NEXORA Mailcow integration ("OPSEC" mail option, central instance, requires Docker)
+# options: ACTION [ARGS]
+#   install HOSTNAME            deploy central mailcow-dockerized in /opt/mailcow-dockerized
+#   connect URL API_KEY         store API endpoint + key (root-only file)
+#   status                      json
+#   domains|mailboxes|aliases   json
+#   add-domain DOMAIN [QUOTA_MB]
+#   del-domain DOMAIN
+#   add-mailbox LOCAL DOMAIN PASSWORD [QUOTA_MB]
+#   del-mailbox ADDRESS
+#   passwd-mailbox ADDRESS PASSWORD
+#   add-alias ADDRESS GOTO
+#   del-alias ID
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+C=/etc/nexora/mailcow.conf
+fail() {
+	echo "Error: $1" >&2
+	exit "${2:-$E_INVALID}"
+}
+dom() { [[ "$1" =~ ^([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$ ]] || fail "invalid domain"; }
+addr() { [[ "$1" =~ ^[A-Za-z0-9._+-]+@([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$ ]] || fail "invalid address"; }
+num() { [[ "$1" =~ ^[0-9]+$ ]] || fail "invalid number"; }
+api() { # METHOD PATH [JSON]
+	[ -f "$C" ] || fail "Mailcow not connected" "$E_NOTEXIST"
+	source "$C"
+	curl -fsS --max-time 30 -X "$1" -H "X-API-Key: $API_KEY" -H "Content-Type: application/json" \
+		${3:+--data-binary "$3"} "$URL/api/v1/$2" || fail "Mailcow API request failed" "$E_CONNECT"
+}
+j() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; }
+case "$1" in
+	install)
+		dom "$2"
+		docker info > /dev/null 2>&1 || fail "Mailcow requires Docker. Not available in Classic Hosting Mode." "$E_NOTEXIST"
+		[ -d /opt/mailcow-dockerized ] || git clone -q https://github.com/mailcow/mailcow-dockerized /opt/mailcow-dockerized || fail "clone failed"
+		cd /opt/mailcow-dockerized || exit 1
+		[ -f mailcow.conf ] || MAILCOW_HOSTNAME="$2" MAILCOW_TZ="$(cat /etc/timezone 2> /dev/null || echo UTC)" MAILCOW_BRANCH=master ./generate_config.sh < /dev/null || fail "generate_config failed"
+		# Hestia nginx already uses 80/443: bind mailcow web to localhost, publish via reverse proxy
+		sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8880/; s/^HTTPS_PORT=.*/HTTPS_PORT=8843/; s/^HTTP_BIND=.*/HTTP_BIND=127.0.0.1/; s/^HTTPS_BIND=.*/HTTPS_BIND=127.0.0.1/' mailcow.conf
+		docker compose pull -q && docker compose up -d || fail "docker compose up failed"
+		echo "Mailcow started. Create an API key in the Mailcow UI (System > Configuration > Access > API) and run: v-nexora-mailcow connect https://$2 KEY"
+		;;
+	connect)
+		[[ "$2" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?$ ]] || fail "URL must be https://host[:port]"
+		[[ "$3" =~ ^[A-Za-z0-9-]{20,100}$ ]] || fail "invalid API key"
+		install -d -m 750 /etc/nexora
+		umask 077
+		printf "URL='%s'\nAPI_KEY='%s'\n" "$2" "$3" > "$C"
+		api GET get/status/version > /dev/null
+		;;
+	status)
+		[ -f "$C" ] && api GET get/status/version || echo '{"version":null}'
+		exit 0
+		;;
+	domains) api GET get/domain/all ;;
+	mailboxes) api GET get/mailbox/all ;;
+	aliases) api GET get/alias/all ;;
+	add-domain)
+		dom "$2"
+		q=${3-10240}
+		num "$q"
+		api POST add/domain "{\"domain\":$(j "$2"),\"active\":\"1\",\"quota\":\"$q\",\"maxquota\":\"$q\",\"defquota\":\"1024\",\"mailboxes\":\"100\",\"aliases\":\"400\"}"
+		;;
+	del-domain)
+		dom "$2"
+		api POST delete/domain "[$(j "$2")]"
+		;;
+	add-mailbox)
+		dom "$3"
+		[[ "$2" =~ ^[A-Za-z0-9._+-]{1,64}$ ]] || fail "invalid local part"
+		[ ${#4} -ge 10 ] || fail "password min 10 chars"
+		q=${5-1024}
+		num "$q"
+		api POST add/mailbox "{\"local_part\":$(j "$2"),\"domain\":$(j "$3"),\"password\":$(j "$4"),\"password2\":$(j "$4"),\"quota\":\"$q\",\"active\":\"1\"}"
+		;;
+	del-mailbox)
+		addr "$2"
+		api POST delete/mailbox "[$(j "$2")]"
+		;;
+	passwd-mailbox)
+		addr "$2"
+		[ ${#3} -ge 10 ] || fail "password min 10 chars"
+		api POST edit/mailbox "{\"items\":[$(j "$2")],\"attr\":{\"password\":$(j "$3"),\"password2\":$(j "$3")}}"
+		;;
+	add-alias)
+		addr "$2"
+		addr "$3"
+		api POST add/alias "{\"address\":$(j "$2"),\"goto\":$(j "$3"),\"active\":\"1\"}"
+		;;
+	del-alias)
+		num "$2"
+		api POST delete/alias "[\"$2\"]"
+		;;
+	*) fail "unknown action" ;;
+esac
+echo
+[[ "$1" =~ ^(add|del|passwd|connect|install) ]] && log_event "$OK" "$(echo "$ARGUMENTS" | sed -E 's/(passwd-mailbox [^ ]+ |add-mailbox [^ ]+ [^ ]+ |connect [^ ]+ )[^ ]+/\1*****/')"
+exit 0

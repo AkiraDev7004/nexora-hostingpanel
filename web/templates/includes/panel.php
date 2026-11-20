@@ -328,6 +328,13 @@
 					</li>
 				<?php } ?>
 
+				<?php if ($_SESSION["userContext"] === "admin") { ?>
+					<li class="main-menu-item"><a class="main-menu-item-link <?= $TAB == "DOCKER" ? "active" : "" ?>" href="/list/docker/"><p class="main-menu-item-label"><?= _("DOCKER") ?><i class="fab fa-docker"></i></p></a></li>
+				<?php } ?>
+				<?php if (($_SESSION["NX_ROLE"] ?? "") === "reseller") { ?>
+					<li class="main-menu-item"><a class="main-menu-item-link" href="/list/customers/"><p class="main-menu-item-label"><?= _("CUSTOMERS") ?><i class="fas fa-users"></i></p></a></li>
+				<?php } ?>
+
 				<!-- Web tab -->
 				<?php if (isset($_SESSION["WEB_SYSTEM"]) && !empty($_SESSION["WEB_SYSTEM"])) { ?>
 					<?php if ($panel[$user]["WEB_DOMAINS"] != "0") { ?>
