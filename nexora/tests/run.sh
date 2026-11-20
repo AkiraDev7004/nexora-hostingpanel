@@ -42,14 +42,17 @@ if [ "$(id -u)" = 0 ]; then
 	O=/etc/unbound/unbound.conf.d/nexora.conf
 	mkdir -p /etc/unbound/unbound.conf.d
 	export PATH="$S/bin:$PATH"
-	t "block wildcard" "$B add-block '*.example.com' nxdomain && grep -q 'example.com.\" always_nxdomain' $O"
-	t "block sinkhole v4+v6" "$B add-block ads.foo.org sinkhole 192.0.2.1 2001:db8::1 && grep -q 'AAAA 2001:db8::1' $O"
-	t "redirect cname" "$B add-redirect a.org CNAME b.net && grep -q 'CNAME b.net.' $O"
+	Z=/var/lib/unbound/nexora.rpz
+	t "block subdomains only" "$B add-block example.com nxdomain '' '' sub && grep -qx '\*.example.com CNAME .' $Z && ! grep -q '^example.com ' $Z"
+	t "block exact only" "$B add-block exact.org null '' '' exact && grep -q '^exact.org 60 A 0.0.0.0' $Z && ! grep -q 'exact.org' <(grep '^\*' $Z)"
+	t "wildcard shortcut = subdomains" "$B add-block '*.w.com' && grep -qx '\*.w.com CNAME .' $Z && ! grep -q '^w.com ' $Z"
+	t "block sinkhole v4+v6" "$B add-block ads.foo.org sinkhole 192.0.2.1 2001:db8::1 && grep -q '^ads.foo.org 60 AAAA 2001:db8::1' $Z && grep -q '^\*.ads.foo.org 60 A 192.0.2.1' $Z"
+	t "redirect cname" "$B add-redirect a.org CNAME b.net && grep -q '^a.org 300 CNAME b.net.' $Z && grep -q 'rpz:' $O"
 	t "reject injection" "! $B add-block 'x.com\";evil' nxdomain"
 	t "reject bad ip" "! $B add-redirect a.org A 999.1"
 	t "ssrf: http rejected" "! $B add-list l1 http://example.com/list"
 	t "ssrf: localhost rejected" "! $B add-list l2 https://localhost/list"
-	t "delete rule" "$B del-block ads.foo.org && ! grep -q ads.foo.org $O"
+	t "delete rule" "$B del-block ads.foo.org && ! grep -q ads.foo.org $Z"
 	[ -f "$S/bak" ] && cp "$S/bak" /etc/hestiacp/hestia.conf || rm -f /etc/hestiacp/hestia.conf
 	[ $created = 1 ] && rm -rf /etc/hestiacp
 	rm -f "$O"

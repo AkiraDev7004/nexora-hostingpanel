@@ -1,0 +1,38 @@
+#!/bin/bash
+# info: NEXORA access key lifecycle: expiry, disable/enable
+# options: USER ACCESS_KEY_ID ACTION [DATE]
+#   ACTION: expire DATE(YYYY-MM-DD | never) | disable | enable
+# The key must belong to USER (checked here), so users/resellers manage only their own keys.
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+source_conf "$HESTIA/conf/hestia.conf"
+fail() {
+	echo "Error: $1" >&2
+	exit "${2:-$E_INVALID}"
+}
+[[ "$2" =~ ^[[:alnum:]]{20}$ ]] || fail "invalid key id"
+f="$HESTIA/data/access-keys/$2"
+[ -f "$f" ] || fail "key not found" "$E_NOTEXIST"
+USER="$ROOT_USER"
+source_conf "$f"
+[ "$USER" = "$1" ] || fail "key does not belong to $1" "$E_FORBIDEN"
+set_kv() {
+	sed -i "/^$1=/d" "$f"
+	echo "$1='$2'" >> "$f"
+}
+case "$3" in
+	expire)
+		if [ "$4" = never ]; then
+			set_kv EXPIRES_IN ""
+		else
+			[[ "$4" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && ts=$(date -d "$4 23:59:59" +%s 2> /dev/null) || fail "invalid date"
+			set_kv EXPIRES_IN "$ts"
+		fi
+		;;
+	disable) set_kv DISABLED yes ;;
+	enable) set_kv DISABLED no ;;
+	*) fail "unknown action" ;;
+esac
+log_history "Access key $2: $3 $4" "Info" "$1" "API"
+log_event "$OK" "$ARGUMENTS"
+exit 0

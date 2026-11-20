@@ -36,8 +36,14 @@ Fork of HestiaCP (GPL-3.0, see ../LICENSE). Original copyright notices retained.
 - `nexora/scripts/sync-core.sh`: applies NEXORA core over the HestiaCP base (hestia package held; update.sh re-syncs).
 - Tests: `sudo nexora/tests/run.sh` (syntax, security patterns, DNS-block sandbox) + GitHub Actions.
 
+## Update 3
+
+- DNS blocking via Unbound RPZ with scope: domain only / subdomains only / domain + subdomains (verified with a real Unbound).
+- Resellers: "log in as" customer and back, own API keys (group `nexora-reseller`), customer websites via API.
+- API keys: expiry date, disable/enable, last used (UI + `v-nexora-access-key`). Role changes moved to admin-only `v-nexora-set-role`.
+- API docs: quick start, key model, reseller integration flow with Python/PHP/Node, security checklist.
+
 ## Known limits
 
 - Not yet verified on a real server end-to-end.
-- Reseller cannot "log in as" customers yet. `*.domain` blocking also blocks the apex (Unbound semantics).
 - Existing plaintext API keys stay valid until re-created.

@@ -12,7 +12,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && $read_only !== true) {
 	verify_csrf($_POST);
 	exec(
 		HESTIA_CMD .
-			"v-nexora-reseller set-role " .
+			"v-nexora-set-role " .
 			quoteshellarg($_POST["user"] ?? "") .
 			" " .
 			quoteshellarg($_POST["role"] ?? "") .

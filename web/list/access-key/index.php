@@ -19,6 +19,34 @@ if (is_protected_root_target($user_plain)) {
 	exit();
 }
 
+// NEXORA: expiry / disable / enable (owner check happens in v-nexora-access-key)
+if ($_SERVER["REQUEST_METHOD"] === "POST" && !empty($_POST["nx_key"]) && $read_only !== true) {
+	verify_csrf($_POST);
+	$nx_action = $_POST["nx_action"] ?? "";
+	if (in_array($nx_action, ["expire", "disable", "enable"], true)) {
+		$nx_date =
+			$nx_action === "expire" ? ($_POST["nx_date"] !== "" ? $_POST["nx_date"] : "never") : "";
+		exec(
+			HESTIA_CMD .
+				"v-nexora-access-key " .
+				$user .
+				" " .
+				quoteshellarg($_POST["nx_key"]) .
+				" " .
+				$nx_action .
+				" " .
+				quoteshellarg($nx_date) .
+				" 2>&1",
+			$output,
+			$return_var,
+		);
+		check_return_code($return_var, $output);
+		unset($output);
+	}
+	header("Location: " . $_SERVER["REQUEST_URI"]);
+	exit();
+}
+
 // Checks if API access is enabled
 $api_status =
 	!empty($_SESSION["API_SYSTEM"]) && is_numeric($_SESSION["API_SYSTEM"])

@@ -1,8 +1,11 @@
 #!/bin/bash
 # info: NEXORA roles + reseller customers
-# options: ACTION ...
-#   set-role USER user|reseller|admin [PACKAGES]   (admin only via panel; PACKAGES comma list allowed for reseller)
+# options: ACTION USER [ARGS]
+# USER (arg 2) is always the acting reseller, so the API's user-argument check scopes
+# reseller API keys to their own account. Role changes: v-nexora-set-role (admin only).
 #   role USER                                      print role
+#   owns RESELLER CUSTOMER                         exit 0 if customer belongs to reseller
+#   site RESELLER CUSTOMER SITE-ACTION [ARGS...]   run v-nexora-site for an own customer
 #   add-customer RESELLER USER PASSWORD EMAIL PACKAGE [NAME]
 #   customers RESELLER [json]
 #   suspend|unsuspend|delete RESELLER CUSTOMER
@@ -36,13 +39,19 @@ owns() {
 	[ "$(parent "$2")" = "$1" ] || fail "customer does not belong to reseller" "$E_FORBIDEN"
 }
 case "$1" in
-	set-role)
-		uok "$2"
-		[[ "$3" =~ ^(user|reseller|admin)$ ]] || fail "invalid role"
-		[ -z "$4" ] || [[ "$4" =~ ^[A-Za-z0-9_,-]+$ ]] || fail "invalid packages"
-		p=$(parent "$2")
-		printf "ROLE='%s'\nPARENT='%s'\nPACKAGES='%s'\n" "$3" "$p" "$4" > "$(rf "$2")"
-		[ "$3" = admin ] && usermod -aG admin "$2" 2> /dev/null
+	owns)
+		need_reseller "$2"
+		owns "$2" "$3"
+		exit 0
+		;;
+	site)
+		need_reseller "$2"
+		owns "$2" "$3"
+		[[ "$4" =~ ^(add|delete|start|stop|restart|rebuild|status|logs|list|limits)$ ]] || fail "invalid site action"
+		c=$3 a=$4
+		shift 4
+		if [ "$a" = list ]; then exec $BIN/v-nexora-site list "$c" "$@"; fi
+		$BIN/v-nexora-site "$a" "$c" "$@" || exit $?
 		;;
 	role)
 		uok "$2"

@@ -28,7 +28,7 @@ json_list() {
 	for key_file in $HESTIA/data/access-keys/*; do
 		key_file="$(basename -- "$key_file")"
 		if [[ "$key_file" =~ ^[[:alnum:]]{20}$ ]]; then
-			USER="$ROOT_USER" SECRET_ACCESS_KEY="" PERMISSIONS="" DATE="" TIME="" COMMENT=""
+			USER="$ROOT_USER" SECRET_ACCESS_KEY="" PERMISSIONS="" DATE="" TIME="" COMMENT="" EXPIRES_IN="" DISABLED="" LAST_USED=""
 			source_conf "$HESTIA/data/access-keys/$key_file"
 			if [ "$user" = "$USER" ] || [ -z "$user" ]; then
 				PERMISSIONS_ARR='[]'
@@ -45,7 +45,10 @@ json_list() {
 				echo -n '"PERMISSIONS": '${PERMISSIONS_ARR}', '
 				echo -n '"COMMENT": "'${COMMENT}'", '
 				echo -n '"TIME": "'${TIME}'", '
-				echo -n '"DATE": "'${DATE}'"'
+				echo -n '"DATE": "'${DATE}'", '
+				echo -n '"EXPIRES": "'$([[ "$EXPIRES_IN" =~ ^[0-9]+$ ]] && date -d "@$EXPIRES_IN" +%F)'", '
+				echo -n '"DISABLED": "'${DISABLED:-no}'", '
+				echo -n '"LAST_USED": "'${LAST_USED}'"'
 				echo -n '}'
 				quote=",\n"
 			fi

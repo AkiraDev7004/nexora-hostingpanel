@@ -319,6 +319,9 @@
 					</li>
 				<?php } ?>
 
+				<?php if (!empty($_SESSION["nx_reseller_origin"])) { ?>
+					<li class="main-menu-item"><a class="main-menu-item-link" href="/login/customer/?back=1&token=<?= tohtml($_SESSION["token"]) ?>"><p class="main-menu-item-label">&larr; <?= tohtml($_SESSION["nx_reseller_origin"]) ?><i class="fas fa-right-from-bracket"></i></p></a></li>
+				<?php } ?>
 				<!-- NEXORA Websites -->
 				<?php if (isset($_SESSION["WEB_SYSTEM"]) && !empty($_SESSION["WEB_SYSTEM"])) { ?>
 					<li class="main-menu-item">

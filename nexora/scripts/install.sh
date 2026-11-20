@@ -86,6 +86,8 @@ cp -r "$ROOT/nexora/." /usr/local/nexora/
 	err "Applying NEXORA files failed"
 	exit 1
 }
+# API for all users; every key stays scoped to its owner by the API user-argument check
+/usr/local/hestia/bin/v-change-sys-config-value API_SYSTEM 2
 printf 'MODE=%s\nDOCKER=%s\nNODE=%s\nPYTHON=%s\nMAILCOW=%s\n' $MODE $DOCKER "$(yn node)" "$(yn python)" "$(yn mailcow)" > /etc/nexora/nexora.conf
 chmod 640 /etc/nexora/nexora.conf
 /usr/local/hestia/bin/v-change-sys-config-value THEME nexora-oled

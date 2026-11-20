@@ -1,6 +1,8 @@
 <?php $tok = tohtml($_SESSION["token"]); ?>
 <div class="container">
-	<h1 class="u-mb20"><?= tohtml(_("My Customers")) ?></h1>
+	<div class="u-side-by-side u-mb20"><h1><?= tohtml(_("My Customers")) ?></h1>
+		<div><a class="button button-secondary" href="/list/access-key/"><i class="fas fa-key"></i> <?= tohtml(_("API Keys")) ?></a>
+		<a class="button button-secondary" href="/list/api-docs/#reseller"><i class="fas fa-book"></i> <?= tohtml(_("Integration guide")) ?></a></div></div>
 	<?php show_alert_message($_SESSION); ?>
 	<form method="post" class="u-mb20 u-side-by-side">
 		<input type="hidden" name="token" value="<?= $tok ?>"><input type="hidden" name="action" value="add-customer">
@@ -19,6 +21,7 @@
 			<div class="units-table-cell"><?= tohtml($c["PACKAGE"]) ?></div>
 			<div class="units-table-cell"><?= tohtml($c["WEB"] . " " . _("web domains") . " · " . $c["DISK"] . " MB") ?></div>
 			<div class="units-table-cell">
+				<a class="button button-secondary" href="/login/customer/?user=<?= urlencode($u) ?>&token=<?= $tok ?>"><?= tohtml(_("Log in as")) ?></a>
 				<?php foreach ([$c["SUSPENDED"] === "yes" ? "unsuspend" : "suspend", "delete"] as $a) { ?>
 				<form method="post" style="display:inline" <?= $a === "delete" ? 'onsubmit="return confirm(\'Delete?\')"' : "" ?>><input type="hidden" name="token" value="<?= $tok ?>"><input type="hidden" name="customer" value="<?= tohtml($u) ?>"><button class="button button-secondary" name="action" value="<?= $a ?>"><?= tohtml(_(ucfirst($a))) ?></button></form>
 				<?php } ?>

@@ -27,9 +27,21 @@ if ($api_status < 1 || ($user_plain != $_SESSION["ROOT_USER"] && $api_status < 2
 // APIs available
 exec(HESTIA_CMD . "v-list-apis json", $output, $return_var);
 $apis = json_decode(implode("", $output), true);
-$apis = array_filter($apis, function ($api) use ($user_plain) {
-	return $user_plain == $_SESSION["ROOT_USER"] || $api["ROLE"] == "user";
-});
+$apis = array_filter(
+	$apis,
+	function ($api, $name) use ($user_plain) {
+		// NEXORA: reseller permission group is only offered to resellers (server still checks the role)
+		if (
+			$name === "nexora-reseller" &&
+			$user_plain != $_SESSION["ROOT_USER"] &&
+			($_SESSION["NX_ROLE"] ?? "") !== "reseller"
+		) {
+			return false;
+		}
+		return $user_plain == $_SESSION["ROOT_USER"] || $api["ROLE"] == "user";
+	},
+	ARRAY_FILTER_USE_BOTH,
+);
 ksort($apis);
 unset($output);
 

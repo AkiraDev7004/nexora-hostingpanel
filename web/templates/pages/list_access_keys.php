@@ -114,6 +114,19 @@
 					<span class="u-hide-desktop"><?= tohtml( _("Time")) ?>:</span>
 					<?= tohtml($key_time) ?>
 				</div>
+				<div class="units-table-cell">
+					<span class="u-hide-desktop"><?= tohtml(_("Status")) ?>:</span>
+					<?= tohtml(($value["DISABLED"] ?? "no") === "yes" ? _("disabled") : _("active")) ?>
+					<?php if (!empty($value["EXPIRES"])) { ?> · <?= tohtml(_("expires")) ?> <?= tohtml($value["EXPIRES"]) ?><?php } ?>
+					<?php if (!empty($value["LAST_USED"])) { ?><br><small><?= tohtml(_("last used")) ?> <?= tohtml($value["LAST_USED"]) ?></small><?php } ?>
+					<form method="post" class="u-side-by-side u-mt10">
+						<input type="hidden" name="token" value="<?= tohtml($_SESSION["token"]) ?>">
+						<input type="hidden" name="nx_key" value="<?= tohtml($key) ?>">
+						<input type="date" class="form-control" name="nx_date" value="<?= tohtml($value["EXPIRES"] ?? "") ?>" title="<?= tohtml(_("Expiry date (empty = never)")) ?>">
+						<button class="button button-secondary" name="nx_action" value="expire"><?= tohtml(_("Set expiry")) ?></button>
+						<button class="button button-secondary" name="nx_action" value="<?= ($value["DISABLED"] ?? "no") === "yes" ? "enable" : "disable" ?>"><?= tohtml(($value["DISABLED"] ?? "no") === "yes" ? _("Enable") : _("Disable")) ?></button>
+					</form>
+				</div>
 			</div>
 		<?php } ?>
 	</div>

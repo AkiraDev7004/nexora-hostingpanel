@@ -1,0 +1,21 @@
+#!/bin/bash
+# info: NEXORA set role of a user (admin only)
+# options: TARGET ROLE [PACKAGES]
+#   ROLE: user|reseller|admin   PACKAGES: comma list of packages a reseller may assign
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+source_conf "$HESTIA/conf/hestia.conf"
+fail() {
+	echo "Error: $1" >&2
+	exit "${2:-$E_INVALID}"
+}
+[[ "$1" =~ ^[a-z][a-z0-9_-]{1,30}$ ]] && [ -d "$HESTIA/data/users/$1" ] || fail "invalid user" "$E_NOTEXIST"
+[[ "$2" =~ ^(user|reseller|admin)$ ]] || fail "invalid role"
+[ -z "$3" ] || [[ "$3" =~ ^[A-Za-z0-9_,-]+$ ]] || fail "invalid packages"
+[ "$1" = "$ROOT_USER" ] && fail "super admin role cannot be changed" "$E_FORBIDEN"
+f="$HESTIA/data/users/$1/nexora-role"
+PARENT=""
+[ -f "$f" ] && source "$f"
+printf "ROLE='%s'\nPARENT='%s'\nPACKAGES='%s'\n" "$2" "$PARENT" "$3" > "$f"
+log_event "$OK" "$ARGUMENTS"
+exit 0
