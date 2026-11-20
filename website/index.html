@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -48,62 +48,62 @@ footer .w{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
 <body>
 <nav><div class="w">
   <a class="logo" href="#">NEXORA</a>
-  <div class="links"><a href="#features">Features</a><a href="#modes">Modi</a><a href="#install">Installation</a><a href="https://github.com/AkiraDev7004/nexora-hostingpanel">GitHub</a></div>
-  <button class="btn" id="tt" aria-label="Theme wechseln">Light</button>
+  <div class="links"><a href="#features">Features</a><a href="#modes">Modes</a><a href="#install">Installation</a><a href="https://github.com/AkiraDev7004/nexora-hostingpanel">GitHub</a></div>
+  <button class="btn" id="tt" aria-label="Toggle theme">Light</button>
 </div></nav>
 
 <header><div class="w">
   <span class="tag">Open Source · GPL-3.0</span>
   <h1>Simple Hosting.<br>Serious Isolation.<br>Total Control.</h1>
-  <p class="lead">NEXORA Panel ist ein selbst gehostetes Control Panel für Websites, Datenbanken, Mail und DNS – mit einem eigenen Docker-Container pro Website.</p>
+  <p class="lead">NEXORA Panel is a self-hosted control panel for websites, databases, mail and DNS – with a dedicated Docker container for every website.</p>
   <div class="cta">
-    <a class="btn p" href="#install">Installieren</a>
-    <a class="btn" href="https://github.com/AkiraDev7004/nexora-hostingpanel">Quellcode ansehen</a>
+    <a class="btn p" href="#install">Install</a>
+    <a class="btn" href="https://github.com/AkiraDev7004/nexora-hostingpanel">View source</a>
   </div>
   <pre>git clone -b nexora https://github.com/AkiraDev7004/nexora-hostingpanel.git
 sudo bash nexora-hostingpanel/nexora/scripts/install.sh</pre>
 </div></header>
 
 <section id="features"><div class="w">
-  <h2>Alles, was ein Server braucht.</h2>
-  <p class="sub">Website erstellen, Typ wählen, fertig. Nginx-Konfiguration, Container, SSL und DNS richtet NEXORA automatisch ein.</p>
+  <h2>Everything your server needs.</h2>
+  <p class="sub">Create a website, pick a type, done. NEXORA sets up Nginx, containers, SSL and DNS automatically.</p>
   <div class="grid">
-    <div class="c"><h3>Website-Wizard</h3><p>PHP, WordPress, Node.js, Python, Static oder Reverse Proxy – nur die Optionen, die der Typ braucht.</p></div>
-    <div class="c"><h3>Ein Container pro Website</h3><p>Eigenes Netzwerk, non-root, keine Capabilities, read-only Root-FS, CPU- und RAM-Limits.</p></div>
-    <div class="c"><h3>Let's Encrypt</h3><p>Zertifikate direkt bei der Erstellung, automatische Verlängerung, HTTP→HTTPS.</p></div>
-    <div class="c"><h3>Eigene DNS-Server</h3><p>Zonen und Records verwalten. Authoritative Server bleiben strikt nicht-rekursiv.</p></div>
-    <div class="c"><h3>DNS-Blocking</h3><p>Domains, Subdomains und Wildcards blockieren. NXDOMAIN, 0.0.0.0 oder Sinkhole. Blocklisten per URL.</p></div>
-    <div class="c"><h3>Mail</h3><p>Postfix, Dovecot und Roundcube – oder Mailcow als zentrale Instanz, wenn Docker verfügbar ist.</p></div>
-    <div class="c"><h3>IPv4 &amp; IPv6</h3><p>Mehrere IPs, Zuweisung pro Website. Nur IPs, die wirklich auf dem Server konfiguriert sind.</p></div>
-    <div class="c"><h3>API</h3><p>API-Keys mit Berechtigungen und Ablaufdatum. Secrets werden nur gehasht gespeichert.</p></div>
-    <div class="c"><h3>OLED Dark Mode</h3><p>Echtes Schwarz, klare Kontraste, keine Effekte. Light Mode optional.</p></div>
+    <div class="c"><h3>Website wizard</h3><p>PHP, WordPress, Node.js, Python, static or reverse proxy – only the options each type needs.</p></div>
+    <div class="c"><h3>One container per website</h3><p>Own network, non-root, no capabilities, read-only root FS, CPU and RAM limits.</p></div>
+    <div class="c"><h3>Let's Encrypt</h3><p>Certificates at creation time, automatic renewal, HTTP→HTTPS.</p></div>
+    <div class="c"><h3>Your own DNS servers</h3><p>Manage zones and records. Authoritative servers stay strictly non-recursive.</p></div>
+    <div class="c"><h3>DNS blocking</h3><p>Block domains, subdomains and wildcards. NXDOMAIN, 0.0.0.0 or sinkhole. Blocklists via URL.</p></div>
+    <div class="c"><h3>Mail</h3><p>Postfix, Dovecot and Roundcube – or Mailcow as a central instance when Docker is available.</p></div>
+    <div class="c"><h3>IPv4 &amp; IPv6</h3><p>Multiple IPs, assigned per website. Only IPs that are actually configured on the server.</p></div>
+    <div class="c"><h3>API</h3><p>API keys with permissions and expiry. Secrets are stored hashed only.</p></div>
+    <div class="c"><h3>OLED Dark Mode</h3><p>True black, clear contrast, no effects. Optional light mode.</p></div>
   </div>
 </div></section>
 
 <section id="modes"><div class="w">
-  <h2>Zwei Betriebsmodi.</h2>
-  <p class="sub">Der Installer testet Docker mit einem echten Testcontainer und wählt den passenden Modus.</p>
+  <h2>Two operating modes.</h2>
+  <p class="sub">The installer tests Docker with a real test container and picks the right mode.</p>
   <div class="modes">
-    <div class="m"><span class="tag">Empfohlen</span><h3>Full Docker Mode</h3>
-      <ul><li>Eigener Container pro Website</li><li>Isolierte Netzwerke</li><li>Ressourcenlimits &amp; Monitoring</li><li>Mailcow verfügbar</li></ul></div>
-    <div class="m"><span class="tag">Für eingeschränkte Systeme</span><h3>Classic Hosting Mode</h3>
-      <ul><li>Linux-User &amp; PHP-FPM-Pool pro Website</li><li>Ideal für Proxmox LXC ohne Docker</li><li>Postfix, Dovecot, Roundcube</li><li>Weniger Isolation als Docker – klar gekennzeichnet</li></ul></div>
+    <div class="m"><span class="tag">Recommended</span><h3>Full Docker Mode</h3>
+      <ul><li>Dedicated container per website</li><li>Isolated networks</li><li>Resource limits &amp; monitoring</li><li>Mailcow available</li></ul></div>
+    <div class="m"><span class="tag">For restricted systems</span><h3>Classic Hosting Mode</h3>
+      <ul><li>Linux user &amp; PHP-FPM pool per website</li><li>Ideal for Proxmox LXC without Docker</li><li>Postfix, Dovecot, Roundcube</li><li>Less isolation than Docker – clearly labeled</li></ul></div>
   </div>
 </div></section>
 
 <section id="install"><div class="w">
-  <h2>In Minuten installiert.</h2>
-  <p class="sub">Debian 11–13 oder Ubuntu 22.04 / 24.04. Für beste Docker-Kompatibilität empfehlen wir eine dedizierte VM.</p>
+  <h2>Installed in minutes.</h2>
+  <p class="sub">Debian 11–13 or Ubuntu 22.04 / 24.04. For the best Docker compatibility we recommend a dedicated VM.</p>
   <div class="steps">
-    <div class="st"><h3>Systemprüfung</h3><p class="sub" style="margin:0">OS, Virtualisierung, Hardware, Netzwerk.</p></div>
-    <div class="st"><h3>Docker-Test</h3><p class="sub" style="margin:0">Echter Container-Start statt Annahmen.</p></div>
-    <div class="st"><h3>Komponenten</h3><p class="sub" style="margin:0">Complete, Minimal oder Custom.</p></div>
-    <div class="st"><h3>Fertig</h3><p class="sub" style="margin:0">Panel-URL und Admin-Zugang.</p></div>
+    <div class="st"><h3>System check</h3><p class="sub" style="margin:0">OS, virtualization, hardware, network.</p></div>
+    <div class="st"><h3>Docker test</h3><p class="sub" style="margin:0">A real container start instead of assumptions.</p></div>
+    <div class="st"><h3>Components</h3><p class="sub" style="margin:0">Complete, minimal or custom.</p></div>
+    <div class="st"><h3>Done</h3><p class="sub" style="margin:0">Panel URL and admin access.</p></div>
   </div>
 </div></section>
 
 <footer><div class="w">
-  <span>© NEXORA Panel · GPL-3.0 · basiert auf <a href="https://github.com/hestiacp/hestiacp" style="text-decoration:underline">HestiaCP</a></span>
+  <span>© NEXORA Panel · GPL-3.0 · based on <a href="https://github.com/hestiacp/hestiacp" style="text-decoration:underline">HestiaCP</a></span>
   <a href="https://github.com/AkiraDev7004/nexora-hostingpanel">GitHub</a>
 </div></footer>
 <script>
