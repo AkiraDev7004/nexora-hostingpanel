@@ -1,0 +1,55 @@
+#!/bin/bash
+# info: NEXORA white-label branding
+# options: ACTION [KEY] [VALUE]
+#   json                       print branding as JSON
+#   set KEY VALUE              KEY: name|title|footer|description|accent|support_url|docs_url|login_text|mail_from
+#   image KIND FILE            KIND: logo|login_logo|favicon  (PNG/JPEG/WEBP, max 1 MB)
+#   reset-image KIND
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+F="$HESTIA/conf/nexora-branding.conf"
+IMG="$HESTIA/web/images/custom"
+touch "$F"; chmod 640 "$F"
+fail() { echo "Error: $1" >&2; exit "${2:-$E_INVALID}"; }
+get() { sed -n "s/^$1=//p" "$F" | tail -1; }
+case "$1" in
+	json)
+		printf '{'
+		first=1
+		for k in name title footer description accent support_url docs_url login_text mail_from; do
+			v=$(get $k | sed 's/\\/\\\\/g; s/"/\\"/g')
+			[ $first = 1 ] || printf ','
+			printf '"%s":"%s"' "$k" "$v"
+			first=0
+		done
+		for k in logo login_logo favicon; do
+			f=$(ls "$IMG/$k".* 2> /dev/null | head -1)
+			printf ',"%s":"%s"' "$k" "${f:+/images/custom/$(basename "$f")?v=$(stat -c %Y "$f")}"
+		done
+		echo '}'
+		exit 0 ;;
+	set)
+		k=$2 v=$3
+		case "$k" in
+			name | title | footer | description | login_text | mail_from) [ ${#v} -le 200 ] || fail "too long" ;;
+			accent) [[ -z "$v" || "$v" =~ ^#[0-9A-Fa-f]{6}$ ]] || fail "accent must be #RRGGBB" ;;
+			support_url | docs_url) [[ -z "$v" || "$v" =~ ^https?://[^[:space:]\"\'\<\>]{1,300}$ ]] || fail "invalid URL" ;;
+			*) fail "unknown key" ;;
+		esac
+		[[ "$v" == *$'\n'* ]] && fail "no newlines"
+		grep -v "^$k=" "$F" > "$F.tmp"; echo "$k=$v" >> "$F.tmp"; mv "$F.tmp" "$F"; chmod 640 "$F"
+		[ "$k" = name ] && [ -n "$v" ] && $BIN/v-change-sys-config-value APP_NAME "$v" ;;
+	image)
+		[[ "$2" =~ ^(logo|login_logo|favicon)$ ]] || fail "invalid kind"
+		[ -f "$3" ] || fail "no file"
+		[ "$(stat -c %s "$3")" -le 1048576 ] || fail "max 1 MB"
+		case "$(file -b --mime-type "$3")" in image/png) e=png ;; image/jpeg) e=jpg ;; image/webp) e=webp ;; *) fail "PNG, JPEG or WEBP only" ;; esac
+		mkdir -p "$IMG"; rm -f "$IMG/$2".*
+		install -m 644 "$3" "$IMG/$2.$e" ;;
+	reset-image)
+		[[ "$2" =~ ^(logo|login_logo|favicon)$ ]] || fail "invalid kind"
+		rm -f "$IMG/$2".* ;;
+	*) fail "unknown action" ;;
+esac
+log_event "$OK" "$ARGUMENTS"
+exit 0

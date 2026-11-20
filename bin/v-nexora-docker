@@ -1,0 +1,35 @@
+#!/bin/bash
+# info: NEXORA Docker management (admin only)
+# options: ACTION [ARG] [FORMAT]
+#   containers [json] | images [json] | networks [json] | usage [json]
+#   image-rm IMAGE_ID | image-prune | info
+# Only containers labelled nexora.site are managed.
+
+source /etc/hestiacp/hestia.conf
+source $HESTIA/func/main.sh
+fail() { echo "Error: $1" >&2; exit "${2:-$E_INVALID}"; }
+docker info > /dev/null 2>&1 || fail "Docker is not available on this system. NEXORA is running in Classic Hosting Mode." "$E_NOTEXIST"
+fmt=${2-shell}
+tojson() { # lines of JSON objects -> array
+	echo "["; paste -sd, -; echo "]"
+}
+case "$1" in
+	containers)
+		docker ps -a --filter label=nexora.site --format '{"ID":"{{.ID}}","NAME":"{{.Names}}","IMAGE":"{{.Image}}","STATE":"{{.State}}","STATUS":"{{.Status}}","SITE":"{{.Label "nexora.site"}}","USER":"{{.Label "nexora.user"}}","PORTS":"{{.Ports}}"}' | tojson ;;
+	images)
+		docker images --format '{"ID":"{{.ID}}","REPO":"{{.Repository}}","TAG":"{{.Tag}}","SIZE":"{{.Size}}","CREATED":"{{.CreatedSince}}"}' | tojson ;;
+	networks)
+		docker network ls --filter label=nexora.site --format '{"ID":"{{.ID}}","NAME":"{{.Name}}","DRIVER":"{{.Driver}}","SITE":"{{.Label "nexora.site"}}"}' | tojson ;;
+	usage)
+		ids=$(docker ps -q --filter label=nexora.site)
+		[ -z "$ids" ] && { echo "[]"; exit 0; }
+		docker stats --no-stream --format '{"NAME":"{{.Name}}","CPU":"{{.CPUPerc}}","MEM":"{{.MemUsage}}","MEMP":"{{.MemPerc}}","NET":"{{.NetIO}}","BLOCK":"{{.BlockIO}}","PIDS":"{{.PIDs}}"}' $ids | tojson ;;
+	image-rm)
+		[[ "$2" =~ ^[a-f0-9]{12,64}$ ]] || fail "invalid image id"
+		docker image rm "$2" > /dev/null || fail "image in use or not found" "$E_UPDATE" ;;
+	image-prune) docker image prune -f > /dev/null ;;
+	info) docker version --format '{"SERVER":"{{.Server.Version}}","API":"{{.Server.APIVersion}}"}' ;;
+	*) fail "unknown action" ;;
+esac
+[[ "$1" =~ ^image- ]] && log_event "$OK" "$ARGUMENTS"
+exit 0

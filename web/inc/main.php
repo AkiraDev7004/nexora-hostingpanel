@@ -593,6 +593,13 @@ function load_hestia_config() {
 	foreach ($sys_arr as $key => $value) {
 		$_SESSION[$key] = $value;
 	}
+	// NEXORA white-label branding
+	exec(HESTIA_CMD . "v-nexora-branding json", $bout, $brv);
+	$_SESSION["NX_BRAND"] = $brv == 0 ? json_decode(implode("", $bout), true) ?: [] : [];
+}
+
+function nx_brand($key, $default = "") {
+	return !empty($_SESSION["NX_BRAND"][$key]) ? $_SESSION["NX_BRAND"][$key] : $default;
 }
 
 /**
